@@ -3,7 +3,6 @@ from enum import Enum
 from Channel import Channel
 from pickhardtpayments import UncertaintyChannel
 
-from typing import List
 
 class AttemptStatus(Enum):
     PLANNED = 1
@@ -32,7 +31,7 @@ class Attempt:
     :type amount: int
     """
 
-    def __init__(self, path: List[UncertaintyChannel], amount: int = 0):
+    def __init__(self, path: list[UncertaintyChannel], amount: int = 0):
         """Constructor method
         """
         if amount >= 0:
@@ -69,7 +68,7 @@ class Attempt:
         return description
 
     @property
-    def path(self) -> List[Channel]:
+    def path(self) -> list[Channel]:
         """Returns the path of the attempt.
 
         :return: the list of Channels that the path consists of

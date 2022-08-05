@@ -2,6 +2,7 @@ from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
 
 from ortools.graph import pywrapgraph
+from NegativeCircleMinCostSolver import NegativeCircleMinCostSolver
 
 
 from typing import List
@@ -27,11 +28,13 @@ class SyncSimulatedPaymentSession():
     def __init__(self,
                  oracle: OracleLightningNetwork,
                  uncertainty_network: UncertaintyNetwork,
-                 prune_network: bool = True):
+                 prune_network: bool = True,
+                 use_negative_circle_solver: bool = False):
         self._oracle = oracle
         self._uncertainty_network = uncertainty_network
         self._prune_network = prune_network
         self._prepare_integer_indices_for_nodes()
+        self.use_negative_circle_solver = use_negative_circle_solver
 
     def _prepare_integer_indices_for_nodes(self):
         """
@@ -46,6 +49,38 @@ class SyncSimulatedPaymentSession():
         for k, node_id in enumerate(self._uncertainty_network.network.nodes()):
             self._mcf_id[node_id] = k
             self._node_key[k] = node_id
+
+    def _prepare_neg_circle_solver(self, src, dest, amt: int = 1, mu: int = 100_000_000, base_fee: int = DEFAULT_BASE_THRESHOLD):
+        """
+        computes the uncertainty network given our prior belief and prepares the min cost flow solver
+
+        This function can define a value for \mu to control how heavily we combine the uncertainty cost and fees
+        Also the function supports only taking channels into account that don't charge a base_fee higher or equal to `base`
+
+        returns the instantiated min_cost_flow object from the google OR-lib that contains the piecewise linearized problem
+        """
+        self._min_cost_flow=NegativeCircleMinCostSolver()
+        f=open("lightning.data", "w")
+        print(len(self._uncertainty_network.network.nodes()), len(self._uncertainty_network.network.edges(data="channel")),
+                 self._mcf_id[src], self._mcf_id[dest], int(amt), file=f)
+
+        self._arc_to_channel = {}
+        index=0
+        for s, d, channel in self._uncertainty_network.network.edges(data="channel"):
+            # ignore channels with too large base fee
+            if channel.base_fee > base_fee:
+                continue
+            # FIXME: Remove Magic Number for pruning
+            # Prune channels away thay have too low success probability! This is a huge runtime boost
+            # However the pruning would be much better to work on quantiles of normalized cost
+            # So as soon as we have better Scaling, Centralization and feature engineering we can
+            # probably have a more focused pruning
+            if self._prune_network and channel.success_probability(250_000) < 0.9:
+                continue
+            print(self._mcf_id[s], self._mcf_id[d], channel.conditional_capacity, int(channel.ppm), file=f)
+            self._arc_to_channel[index] = (s, d, channel, 0)
+            index+=1
+        f.close()
 
     def _prepare_mcf_solver(self, src, dest, amt: int = 1, mu: int = 100_000_000, base_fee: int = DEFAULT_BASE_THRESHOLD):
         """
@@ -193,7 +228,10 @@ class SyncSimulatedPaymentSession():
         """
 
         # First we prepare the min cost flow by getting arcs from the uncertainty network
-        self._prepare_mcf_solver(src, dest, amt, mu, base)
+        if self.use_negative_circle_solver:
+            self._prepare_neg_circle_solver(src, dest, amt, mu, base)
+        else:
+            self._prepare_mcf_solver(src, dest, amt, mu, base)
 
         start = time.time()
         #print("solving mcf...")

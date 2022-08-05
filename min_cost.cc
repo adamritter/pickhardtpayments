@@ -1,6 +1,6 @@
+// TODO: add back 0 cost edges
 // min_cost alternative implementation
 // Usage: g++ min_cost.cc -std=c++17 -O2 -lm -o min_cost && ./min_cost
-const int AMOUNT=37077242; // Amount of sats to send (0.37 BTC)
 
 #include <vector>
 #include <stdio.h>
@@ -792,7 +792,6 @@ int main(){
     if(!F) {return -1;}
     int N, M, s, t, value;
     fscanf(F, "%d%d%d%d%d", &N, &M, &s, &t, &value);  
-    value=AMOUNT;
     ccc=crc(crc(N, M), crc(crc(s, t), value));
     std::vector<std::tuple<int,int,int,int,int> > lightning_data; // u, v, capacity, cost, flow=0
     char ss[1000];
@@ -836,8 +835,9 @@ int main(){
     begin=now();
     std::vector<std::pair<int, int>> adj[N];  // v, cost
     std::vector<Edge2> adj2[N];  // flow, capacity  // same for negative for now
-    float log_probability_cost_multiplier=10000000;
+    float log_probability_cost_multiplier=150000000;
     int numneg=0;
+    std::vector<int> lightning_data_idx;
     for (int i = 0; i < lightning_data.size(); ++i)
     {
         auto data = lightning_data[i];
@@ -847,7 +847,7 @@ int main(){
         if(er.remaining_capacity > 0) {
             numneg++;
         }
-
+        lightning_data_idx.push_back(adj2[get<0>(data)].size());
         adj2[get<0>(data)].push_back(e);
         adj2[get<1>(data)].push_back(er);
         adj[get<0>(data)].push_back(getAdj(e, er, log_probability_cost_multiplier));
@@ -888,5 +888,15 @@ int main(){
     elapsed("total time", begin);  // 2500ms for 0.5 BTC
     cout << rounds << " rounds, satoshis=" << value << endl;
     printf("%d rounds\n", rounds);
+    FILE *OUT=fopen("min_cost.out", "w");
+    fprintf(OUT, "%d\n", lightning_data.size());
+    for(int i=0; i<lightning_data.size(); i++) {
+        auto data =lightning_data[i];
+        int u=get<0>(data);
+        auto e=adj2[u][lightning_data_idx[i]];
+        auto er=adj2[e.v][e.reverse_idx];
+        fprintf(OUT, "%d\n", er.remaining_capacity);
+    }
+    fclose(OUT);
 
 }

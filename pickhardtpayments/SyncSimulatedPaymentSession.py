@@ -62,7 +62,7 @@ class SyncSimulatedPaymentSession():
         self._min_cost_flow=NegativeCircleMinCostSolver()
         f=open("lightning.data", "w")
         print(len(self._uncertainty_network.network.nodes()), len(self._uncertainty_network.network.edges(data="channel")),
-                 self._mcf_id[src], self._mcf_id[dest], int(amt), file=f)
+                 self._mcf_id[src], self._mcf_id[dest], int(amt), 10000000, file=f)
 
         self._arc_to_channel = {}
         index=0
@@ -77,7 +77,11 @@ class SyncSimulatedPaymentSession():
             # probably have a more focused pruning
             if self._prune_network and channel.success_probability(250_000) < 0.9:
                 continue
-            print(self._mcf_id[s], self._mcf_id[d], channel.conditional_capacity, int(channel.ppm), file=f)
+            guaranteed_liquidity=int(channel.min_liquidity-channel.in_flight)
+            if guaranteed_liquidity < 0:
+                guaranteed_liquidity=0
+            print(self._mcf_id[s], self._mcf_id[d], channel.conditional_capacity, int(channel.ppm),
+                guaranteed_liquidity, file=f)
             self._arc_to_channel[index] = (s, d, channel, 0)
             index+=1
         f.close()

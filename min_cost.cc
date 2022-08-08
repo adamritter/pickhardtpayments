@@ -1,4 +1,5 @@
-// TODO: add back 0 cost edges
+// TODO: add back 0 cost edges for negative cycle, make it work (now buggy :( ))
+// TODO: add guaranteed liquidity
 // min_cost alternative implementation
 // Usage: g++ min_cost.cc -std=c++17 -O2 -lm -o min_cost && ./min_cost
 
@@ -417,7 +418,7 @@ vector<int> spfa2(int n, std::vector<std::pair<int, int>> *adj, std::vector<Edge
 
 
 // i, j, capacity, cost, flow
-long long total_cost(vector<std::tuple<int,int,int,int,int> > & lightning_data) {
+long long total_cost(vector<std::tuple<int,int,int,int,int,int> > & lightning_data) {
     long long r=0;
     for(int i=0; i<lightning_data.size(); i++) {
         auto edge=lightning_data[i];
@@ -791,19 +792,20 @@ int main(){
     FILE *F=fopen("lightning.data", "r");
     if(!F) {return -1;}
     int N, M, s, t, value;
-    fscanf(F, "%d%d%d%d%d", &N, &M, &s, &t, &value);  
+    int log_probability_cost_multiplier;
+    fscanf(F, "%d%d%d%d%d%d", &N, &M, &s, &t, &value, &log_probability_cost_multiplier);  
     ccc=crc(crc(N, M), crc(crc(s, t), value));
-    std::vector<std::tuple<int,int,int,int,int> > lightning_data; // u, v, capacity, cost, flow=0
+    std::vector<std::tuple<int,int,int,int,int,int> > lightning_data; // u, v, capacity, cost, flow=0
     char ss[1000];
     auto begin = now();
     for(int i=0; i<M; i++) {
-        int u, v, capacity, cost;
-        fscanf(F, "%d%d%d%d", &u, &v, &capacity, &cost);
+        int u, v, capacity, cost, guaranteed_liquidity;
+        fscanf(F, "%d%d%d%d%d", &u, &v, &capacity, &cost, &guaranteed_liquidity);
         if(!cost) {
             cost=1;
         }
         ccc=crc(ccc, crc(crc(u, v), crc(capacity, cost)));
-        lightning_data.push_back(make_tuple(u, v, capacity, cost, 0));
+        lightning_data.push_back(make_tuple(u, v, capacity, cost, 0, guaranteed_liquidity));
     }
     cout << "ccc " << ccc << endl;
     elapsed("read", begin);
@@ -835,7 +837,6 @@ int main(){
     begin=now();
     std::vector<std::pair<int, int>> adj[N];  // v, cost
     std::vector<Edge2> adj2[N];  // flow, capacity  // same for negative for now
-    float log_probability_cost_multiplier=150000000;
     int numneg=0;
     std::vector<int> lightning_data_idx;
     for (int i = 0; i < lightning_data.size(); ++i)
@@ -889,7 +890,7 @@ int main(){
     cout << rounds << " rounds, satoshis=" << value << endl;
     printf("%d rounds\n", rounds);
     FILE *OUT=fopen("min_cost.out", "w");
-    fprintf(OUT, "%d\n", lightning_data.size());
+    fprintf(OUT, "%ld\n", lightning_data.size());
     for(int i=0; i<lightning_data.size(); i++) {
         auto data =lightning_data[i];
         int u=get<0>(data);

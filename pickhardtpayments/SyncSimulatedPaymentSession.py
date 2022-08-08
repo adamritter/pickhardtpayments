@@ -429,3 +429,5 @@ class SyncSimulatedPaymentSession():
         print("Fees for successfull delivery: {:8.3f} sat --> {} ppm".format(
             total_fees, int(total_fees*1000*1000/full_amt)))
         print("used mu:", mu)
+        print("remaining amount: ", amt)
+

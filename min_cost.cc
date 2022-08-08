@@ -1,5 +1,5 @@
 // TODO: add back 0 cost edges for negative cycle, make it work (now buggy :( ))
-// TODO: add guaranteed liquidity
+// TODO: Still buggy negative cycle, debug it
 // min_cost alternative implementation
 // Usage: g++ min_cost.cc -std=c++17 -O2 -lm -o min_cost && ./min_cost
 
@@ -252,6 +252,7 @@ struct Edge2 {
     int remaining_capacity;
     int cost;
     int reverse_idx;
+    int guaranteed_liquidity;
 };
 
 vector<int> inline update_dis(int u, int v, int w, long long disu, int * pre, long long * dis,bool*in_queue,
@@ -454,11 +455,16 @@ long long adj_total_cost(int N, std::vector<Edge2> *adj2) {
 
 #include <math.h>
 
+const bool use_guaranteed_capacity=true;
 
 // Returns positive number
 float minus_log_probability(Edge2 e, Edge2 er) {
-    float from_total=(e.cost>0) ? e.remaining_capacity : er.remaining_capacity;
-    float p=(from_total+1)/(e.remaining_capacity+er.remaining_capacity+1);
+    int from_total=(e.cost>0) ? e.remaining_capacity : er.remaining_capacity;
+    int capacity=e.remaining_capacity+er.remaining_capacity;
+    if(use_guaranteed_capacity && from_total+e.guaranteed_liquidity>=capacity) {
+        return 0.0;
+    }
+    float p=(float(from_total)+1)/(capacity-e.guaranteed_liquidity+1);
     return -log2(p);  
 }
 
@@ -479,10 +485,14 @@ long long adj_total_mlog_prob(int N, std::vector<Edge2> *adj2) {
 // Returns 1/(from_total+1)/log(2), the derivative of minus log probability
 float dminus_log_probability(Edge2 e, Edge2 er) {
     const float log2inv=1.0/log(2.0);
-    float from_total=(e.cost>0) ? e.remaining_capacity : er.remaining_capacity;
+    int from_total=(e.cost>0) ? e.remaining_capacity : er.remaining_capacity;
     // float invp=(e.remaining_capacity+er.remaining_capacity+1)/(from_total+1)*log2inv;
     // return invp;
-    return 1.0/from_total/log2inv;
+    int capacity=e.remaining_capacity+er.remaining_capacity;
+    if(use_guaranteed_capacity && from_total+e.guaranteed_liquidity>=capacity) {
+        return 0.0;
+    }
+    return 1.0/float(from_total)/log2inv;
 }
 
 pair<int,int> getAdj(Edge2 e, Edge2 er, float log_probability_cost_multiplier) {
@@ -843,8 +853,8 @@ int main(){
     {
         auto data = lightning_data[i];
         int u=get<0>(data);
-        Edge2 e {get<1>(data), get<2>(data)-get<4>(data), get<3>(data), (int) adj2[get<1>(data)].size()};
-        Edge2 er {get<0>(data), get<4>(data), -get<3>(data), (int)  adj2[get<0>(data)].size()};
+        Edge2 e {get<1>(data), get<2>(data)-get<4>(data), get<3>(data), (int) adj2[get<1>(data)].size(), get<5>(data)};
+        Edge2 er {get<0>(data), get<4>(data), -get<3>(data), (int)  adj2[get<0>(data)].size(), get<5>(data)};
         if(er.remaining_capacity > 0) {
             numneg++;
         }

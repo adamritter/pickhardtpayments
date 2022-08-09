@@ -62,7 +62,7 @@ class SyncSimulatedPaymentSession():
         self._min_cost_flow=NegativeCircleMinCostSolver()
         f=open("lightning.data", "w")
         print(len(self._uncertainty_network.network.nodes()), len(self._uncertainty_network.network.edges(data="channel")),
-                 self._mcf_id[src], self._mcf_id[dest], int(amt), 150000000, file=f)
+                 self._mcf_id[src], self._mcf_id[dest], int(amt), 120000000, file=f)
 
         self._arc_to_channel = {}
         index=0
@@ -416,7 +416,7 @@ class SyncSimulatedPaymentSession():
             cnt += 1
         end = time.time()
         entropy_end = self._uncertainty_network.entropy()
-        print("SUMMARY:")
+        print("SUMMARY (use_negative_circle_solver=", self.use_negative_circle_solver , "):")
         print("========")
         print("Rounds of mcf-computations: ", cnt)
         print("Number of onions sent: ", number_number_of_onions)
@@ -429,5 +429,5 @@ class SyncSimulatedPaymentSession():
         print("Fees for successfull delivery: {:8.3f} sat --> {} ppm".format(
             total_fees, int(total_fees*1000*1000/full_amt)))
         print("used mu:", mu)
-        print("remaining amount: ", amt)
+        print("full amount: ", full_amt, ", remaining amount: ", amt)
 

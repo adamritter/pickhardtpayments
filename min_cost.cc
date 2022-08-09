@@ -2,15 +2,16 @@
 // min_cost alternative implementation
 // Usage: g++ min_cost.cc -std=c++17 -O2 -lm -o min_cost && ./min_cost
 
-#include <vector>
-#include <stdio.h>
-#include <tuple>
-using namespace std;
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <list>
-#include <algorithm>
+#include <math.h>
+#include <stdio.h>
+#include <tuple>
+#include <vector>
 
+using namespace std;
 
 struct OriginalEdge {
     int u, v, capacity, cost, flow, guaranteed_liquidity;
@@ -24,14 +25,13 @@ void elapsed(const char*s, std::chrono::steady_clock::time_point begin) {
 
 }
 
-
 // https://www.geeksforgeeks.org/dinics-algorithm-maximum-flow/
 // C++ implementation of Dinic's Algorithm for Maximum Flow
 using namespace std;
  
 // A structure to represent a edge between
 // two vertex
-struct Edge {
+struct MaxFlowEdge {
     int v; // Vertex v (or "to" vertex)
            // of a directed edge u-v. "From"
            // vertex u can be obtained using
@@ -46,21 +46,21 @@ struct Edge {
              // we can quickly find it.
 };
  
-// Residual Graph
-class Graph {
+// Residual MaxFlowGraph
+class MaxFlowGraph {
     int V; // number of vertex
     int* level; // stores level of a node
  
 public:
-    vector<Edge>* adj;
+    vector<MaxFlowEdge>* adj;
 
-    Graph(int V)
+    MaxFlowGraph(int V)
     {
-        adj = new vector<Edge>[V];
+        adj = new vector<MaxFlowEdge>[V];
         this->V = V;
         level = new int[V];
     }
-    ~Graph() {
+    ~MaxFlowGraph() {
         delete[] adj;
         delete[] level;
     }
@@ -69,10 +69,10 @@ public:
     int addEdge(int u, int v, int C)
     {
         // Forward edge : 0 flow and C capacity
-        Edge a{ v, 0, C, (int)adj[v].size() };
+        MaxFlowEdge a{ v, 0, C, (int)adj[v].size() };
  
         // Back edge : 0 flow and 0 capacity
-        Edge b{ u, 0, 0, (int)adj[u].size() };
+        MaxFlowEdge b{ u, 0, 0, (int)adj[u].size() };
  
         adj[u].push_back(a);
         adj[v].push_back(b); // reverse edge
@@ -86,7 +86,7 @@ public:
  
 // Finds if more flow can be sent from s to t.
 // Also assigns levels to nodes.
-bool Graph::BFS(int s, int t)
+bool MaxFlowGraph::BFS(int s, int t)
 {
     for (int i = 0; i < V; i++)
         level[i] = -1;
@@ -99,12 +99,12 @@ bool Graph::BFS(int s, int t)
     list<int> q;
     q.push_back(s);
  
-    vector<Edge>::iterator i;
+    vector<MaxFlowEdge>::iterator i;
     while (!q.empty()) {
         int u = q.front();
         q.pop_front();
         for (i = adj[u].begin(); i != adj[u].end(); i++) {
-            Edge& e = *i;
+            MaxFlowEdge& e = *i;
             if (level[e.v] < 0 && e.flow < e.C) {
                 // Level of current vertex is,
                 // level of parent + 1
@@ -130,7 +130,7 @@ bool Graph::BFS(int s, int t)
 //           from i.
 //  u : Current vertex
 //  t : Sink
-int Graph::sendFlow(int u, int flow, int t, int start[])
+int MaxFlowGraph::sendFlow(int u, int flow, int t, int start[])
 {
     // Sink reached
     if (u == t)
@@ -139,7 +139,7 @@ int Graph::sendFlow(int u, int flow, int t, int start[])
     // Traverse all adjacent edges one -by - one.
     for (; start[u] < adj[u].size(); start[u]++) {
         // Pick next edge from adjacency list of u
-        Edge& e = adj[u][start[u]];
+        MaxFlowEdge& e = adj[u][start[u]];
  
         if (level[e.v] == level[u] + 1 && e.flow < e.C) {
             // find minimum flow from u to t
@@ -165,7 +165,7 @@ int Graph::sendFlow(int u, int flow, int t, int start[])
 }
  
 // Returns maximum flow in graph
-int Graph::DinicMaxflow(int s, int t, int limit)
+int MaxFlowGraph::DinicMaxflow(int s, int t, int limit)
 {
     // Corner case
     if (s == t)
@@ -239,7 +239,8 @@ long long sum(deque<int>&q, long long* dis) {
         s+=dis[*i];
     return s;
 }
-struct Edge2 {
+
+struct MinCostEdge {
     int v;
     int remaining_capacity;
     int cost;
@@ -268,7 +269,7 @@ vector<int> inline update_dis(int u, int v, int w, long long disu, int * pre, lo
                 return vector<int>();
     }
 
-vector<int> spfa_early_terminate(int n, std::vector<std::pair<int, int>> *adj, std::vector<Edge2> *adj2)
+vector<int> spfa_early_terminate(int n, std::vector<std::pair<int, int>> *adj, std::vector<MinCostEdge> *adj2)
 {
     int pre[n];
     long long dis[n];
@@ -327,11 +328,11 @@ long long total_cost(vector<OriginalEdge> & lightning_data) {
 }
 
 
-long long adj_total_cost(int N, std::vector<Edge2> *adj2) {
+long long adj_total_cost(int N, std::vector<MinCostEdge> *adj2) {
     long long total=0;
     for(int i=0; i<N; i++) {
         for(int j=0; j<adj2[i].size(); j++) {
-            Edge2 e=adj2[i][j];
+            MinCostEdge e=adj2[i][j];
             if(e.cost < 0) {
                 total-=((long long)e.cost)*e.remaining_capacity;
             }
@@ -341,12 +342,11 @@ long long adj_total_cost(int N, std::vector<Edge2> *adj2) {
 }
 
 
-#include <math.h>
 
 const bool use_guaranteed_capacity=true;
 
 // Returns positive number
-float minus_log_probability(Edge2 e, Edge2 er) {
+float minus_log_probability(MinCostEdge e, MinCostEdge er) {
     int from_total=(e.cost>0) ? e.remaining_capacity : er.remaining_capacity;
     int capacity=e.remaining_capacity+er.remaining_capacity;
     if(use_guaranteed_capacity && from_total+e.guaranteed_liquidity>=capacity) {
@@ -356,13 +356,13 @@ float minus_log_probability(Edge2 e, Edge2 er) {
     return -log2(p);  
 }
 
-long long adj_total_mlog_prob(int N, std::vector<Edge2> *adj2) {
+long long adj_total_mlog_prob(int N, std::vector<MinCostEdge> *adj2) {
     double mlogp=0.0;
     for(int i=0; i<N; i++) {
         for(int j=0; j<adj2[i].size(); j++) {
-            Edge2 e=adj2[i][j];
+            MinCostEdge e=adj2[i][j];
             if(e.cost < 0) {
-                Edge2 er=adj2[e.v][e.reverse_idx];
+                MinCostEdge er=adj2[e.v][e.reverse_idx];
                 mlogp+=minus_log_probability(e, er);
             }
         }
@@ -371,7 +371,7 @@ long long adj_total_mlog_prob(int N, std::vector<Edge2> *adj2) {
 }
 
 // Returns 1/(from_total+1)/log(2), the derivative of minus log probability
-float dminus_log_probability(Edge2 e, Edge2 er) {
+float dminus_log_probability(MinCostEdge e, MinCostEdge er) {
     const float log2inv=1.0/log(2.0);
     int from_total=(e.cost>0) ? e.remaining_capacity : er.remaining_capacity;
     // float invp=(e.remaining_capacity+er.remaining_capacity+1)/(from_total+1)*log2inv;
@@ -383,13 +383,13 @@ float dminus_log_probability(Edge2 e, Edge2 er) {
     return 1.0/float(from_total)/log2inv;
 }
 
-pair<int,int> getAdj(Edge2 e, Edge2 er, float log_probability_cost_multiplier) {
+pair<int,int> getAdj(MinCostEdge e, MinCostEdge er, float log_probability_cost_multiplier) {
     if(e.remaining_capacity==0) {
         return make_pair(e.v, INT32_MAX/2);
     }
     int cost = e.cost;
     if(log_probability_cost_multiplier >= 0) {
-        Edge2 e2=e, er2=er;
+        MinCostEdge e2=e, er2=er;
         e2.remaining_capacity-=1;
         er2.remaining_capacity+=1;
         cost+=round(log_probability_cost_multiplier*(minus_log_probability(e2, er2)));
@@ -398,14 +398,14 @@ pair<int,int> getAdj(Edge2 e, Edge2 er, float log_probability_cost_multiplier) {
     return make_pair(e.v, cost);
 }
 
-long long relative_cost_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_probability_cost_multiplier) {
+long long relative_cost_at(int at, vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_probability_cost_multiplier) {
         long long r=0;
         for(int i=0; i<edges.size(); i++) {
-            Edge2 e=edges[i].first;
-            Edge2 er=edges[i].second;
+            MinCostEdge e=edges[i].first;
+            MinCostEdge er=edges[i].second;
             r+=((long long)e.cost)*at;
-            Edge2 e2=e;
-            Edge2 er2=er;
+            MinCostEdge e2=e;
+            MinCostEdge er2=er;
             e2.remaining_capacity-=at;
             er2.remaining_capacity+=at;
             r+=round(log_probability_cost_multiplier*(minus_log_probability(e2, er2)));
@@ -420,13 +420,13 @@ long long relative_cost_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_p
     const bool debug=false;
 #endif
 
-long long derivative_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_probability_cost_multiplier) {
+long long derivative_at(int at, vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_probability_cost_multiplier) {
     long long r=0;
     if(debug)
     cout << "at: " << at << endl;
     for(int i=0; i<edges.size(); i++) {
-        Edge2 e=edges[i].first;
-        Edge2 er=edges[i].second;
+        MinCostEdge e=edges[i].first;
+        MinCostEdge er=edges[i].second;
         e.remaining_capacity-=at;
         er.remaining_capacity+=at;
         if(debug)
@@ -448,12 +448,12 @@ long long derivative_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_prob
 // Algorithm: find 0 derivative using halving. If relative cost is positive, find 0 relative cost.
 // If derivative is positive, restart. If derivative is negative, go back a bit and find 0 relative cost again.
 
-void print_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_probability_cost_multiplier) {
+void print_at(int at, vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_probability_cost_multiplier) {
     cout << "  at " << at << " derivative: " << derivative_at(at, edges, log_probability_cost_multiplier)
         << ", relative cost: " << relative_cost_at(at, edges, log_probability_cost_multiplier) << endl; 
 }
 
-int find_local_minima(vector<pair<Edge2,Edge2>> &edges, float log_probability_cost_multiplier,
+int find_local_minima(vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_probability_cost_multiplier,
     int min_capacity) {
     int min_capacity0=min_capacity;
     bool debug=false;
@@ -559,7 +559,7 @@ int find_local_minima(vector<pair<Edge2,Edge2>> &edges, float log_probability_co
 }
 
 // TODO: decrease min_capacity by finding 0 derivative???
-bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vector<Edge2> *adj2,
+bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vector<MinCostEdge> *adj2,
     float log_probability_cost_multiplier) {
     // Find negative cycle
     
@@ -572,7 +572,7 @@ bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vect
     vector<int> min_costs;
     int min_capacity=INT32_MAX;
     vector<int> min_cost_idxs;
-    vector<pair<Edge2,Edge2> > edges;
+    vector<pair<MinCostEdge,MinCostEdge> > edges;
 
     if(debug) cout << "Possible edges:" << endl;
     for(int i=0; i<negative_cycle.size(); i++) {
@@ -601,7 +601,7 @@ bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vect
             cout << "Bad index!!!!!" << adj[u].size() << ", " << adj2[u].size() << ", " <<  min_cost_idx << endl;
             return false;
         }
-        Edge2 e=adj2[u][min_cost_idx];
+        MinCostEdge e=adj2[u][min_cost_idx];
         if(e.remaining_capacity < min_capacity) {
             min_capacity = e.remaining_capacity;
         }
@@ -649,7 +649,7 @@ bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vect
             cout << "Bad index2!!!!!";
             return false;
         }
-        Edge2 *e=&adj2[u][min_cost_idxs[i]];
+        MinCostEdge *e=&adj2[u][min_cost_idxs[i]];
         int v=e->v;
         if(e->remaining_capacity < min_capacity) {
             printf("too small capacity %d %d\n", min_capacity, e->remaining_capacity);
@@ -661,7 +661,7 @@ bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vect
         }
         e->remaining_capacity-=min_capacity;
         adj2[v][e->reverse_idx].remaining_capacity+=min_capacity;
-        Edge2 er=adj2[v][e->reverse_idx];
+        MinCostEdge er=adj2[v][e->reverse_idx];
         adj[u][min_cost_idxs[i]]=getAdj(*e, er, log_probability_cost_multiplier);
         adj[v][e->reverse_idx]=getAdj(er, *e, log_probability_cost_multiplier);
 
@@ -700,7 +700,7 @@ int main(){
     // Find max path
 
     begin = now();
-    Graph g(N);
+    MaxFlowGraph g(N);
     vector<int> edges_with_flow;
     for(int i=0; i<M; i++) {
         auto data=lightning_data[i];
@@ -721,15 +721,15 @@ int main(){
 
     begin=now();
     std::vector<std::pair<int, int>> adj[N];  // v, cost
-    std::vector<Edge2> adj2[N];  // flow, capacity  // same for negative for now
+    std::vector<MinCostEdge> adj2[N];  // flow, capacity  // same for negative for now
     int numneg=0;
     std::vector<int> lightning_data_idx;
     for (int i = 0; i < lightning_data.size(); ++i)
     {
         auto data = lightning_data[i];
         int u=data.u, v=data.v;
-        Edge2 e {data.v, data.capacity-data.flow, data.cost, (int) adj2[data.v].size(), data.guaranteed_liquidity};
-        Edge2 er {data.u, data.flow, -data.cost, (int)  adj2[data.u].size(), data.guaranteed_liquidity};
+        MinCostEdge e {data.v, data.capacity-data.flow, data.cost, (int) adj2[data.v].size(), data.guaranteed_liquidity};
+        MinCostEdge er {data.u, data.flow, -data.cost, (int)  adj2[data.u].size(), data.guaranteed_liquidity};
         if(er.remaining_capacity > 0) {
             numneg++;
         }

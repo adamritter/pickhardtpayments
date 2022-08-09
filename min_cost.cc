@@ -518,7 +518,12 @@ long long relative_cost_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_p
         return r;
 }
 
-const bool debug=false;
+#ifdef DEBUG
+    const bool debug=true;
+#else
+    const bool debug=false;
+#endif
+
 long long derivative_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_probability_cost_multiplier) {
     long long r=0;
     if(debug)

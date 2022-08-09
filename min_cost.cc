@@ -1,5 +1,4 @@
 // TODO: add back 0 cost edges for negative cycle, make it work (now buggy :( ))
-// TODO: Still buggy negative cycle, debug it
 // min_cost alternative implementation
 // Usage: g++ min_cost.cc -std=c++17 -O2 -lm -o min_cost && ./min_cost
 
@@ -502,13 +501,6 @@ pair<int,int> getAdj(Edge2 e, Edge2 er, float log_probability_cost_multiplier) {
     int cost = e.cost;
     if(log_probability_cost_multiplier >= 0) {
         Edge2 e2=e, er2=er;
-        /*float cost2=round(log_probability_cost_multiplier*dminus_log_probability(e, er));
-        int cost3=(cost2 > INT32_MAX/2) ? INT32_MAX / 2 : round(cost2);
-        if(cost<0) {
-            cost-=cost2;
-        } else {
-            cost+=cost2;
-        }*/
         e2.remaining_capacity-=1;
         er2.remaining_capacity+=1;
         cost+=round(log_probability_cost_multiplier*(minus_log_probability(e2, er2)));
@@ -518,7 +510,7 @@ pair<int,int> getAdj(Edge2 e, Edge2 er, float log_probability_cost_multiplier) {
 }
 
 long long relative_cost_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_probability_cost_multiplier) {
-        float r=0;
+        long long r=0;
         for(int i=0; i<edges.size(); i++) {
             Edge2 e=edges[i].first;
             Edge2 er=edges[i].second;
@@ -527,13 +519,11 @@ long long relative_cost_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_p
             Edge2 er2=er;
             e2.remaining_capacity-=at;
             er2.remaining_capacity+=at;
-            float log_prob_cost_delta=(minus_log_probability(e2, er2)-minus_log_probability(e, er))*log_probability_cost_multiplier;
-            float log_prob_cost_delta2=(log_prob_cost_delta > INT64_MAX/2) ? (INT64_MAX/2) : (log_prob_cost_delta);
-            r+=log_prob_cost_delta2;
+            r+=round(log_probability_cost_multiplier*(minus_log_probability(e2, er2)));
+            r-=round(log_probability_cost_multiplier*(minus_log_probability(e, er)));
         }
-        return round(r);
+        return r;
 }
-
 
 long long derivative_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_probability_cost_multiplier) {
     long long r=0;
@@ -634,15 +624,15 @@ int find_local_minima(vector<pair<Edge2,Edge2>> &edges, float log_probability_co
             print_at(1, edges, log_probability_cost_multiplier);
         }
         while(upper < min_capacity0 &&
-             relative_cost_at(upper, edges, log_probability_cost_multiplier) >
+             relative_cost_at(upper, edges, log_probability_cost_multiplier) >=
              relative_cost_at(upper+1, edges, log_probability_cost_multiplier)){
                 upper++;
         }
         if(upper<=0) {
+            cout << "Why returning 0???" << endl;
             return 0;
         }
         if(relative_cost_at(upper, edges, log_probability_cost_multiplier) < 0) {
-            
             return upper;
         }
         // Nonnegative relative cost with nonnegative derivative, find negative relative cost with upper+1 nonnegative.
@@ -669,7 +659,12 @@ int find_local_minima(vector<pair<Edge2,Edge2>> &edges, float log_probability_co
                 upper--;
             }
             if(upper<=0) {
-                return 0;
+                while(upper < min_capacity0 &&
+                    relative_cost_at(upper, edges, log_probability_cost_multiplier) >=
+                    relative_cost_at(upper+1, edges, log_probability_cost_multiplier)){
+                        upper++;
+                }
+                return upper;
             }
             if(derivative_at(upper, edges, log_probability_cost_multiplier) > 0) {
                 break;
@@ -738,6 +733,8 @@ bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vect
     }
     if(log_probability_cost_multiplier >= 0) {
         cout << "Derivative at 0: " << derivative_at(0, edges, log_probability_cost_multiplier)
+            << ", relative cost at 0: " << relative_cost_at(0, edges, log_probability_cost_multiplier)
+            << ", relative cost at 1: " << relative_cost_at(1, edges, log_probability_cost_multiplier)
             << ", derivative at " << min_capacity << ": " 
             << derivative_at(min_capacity, edges, log_probability_cost_multiplier)
             << endl;

@@ -37,7 +37,7 @@ otto = ids["027ce055380348d7812d2ae7745701c9f93e70c1adeb2657f053f91df4f2843c71"]
 tested_amount = 37077242 #37 million sats
 # write simpler file
 f=open("lightning.data", "w")
-log_probability_cost_multiplier=10000000  # 100M / 150M doesn't work well
+log_probability_cost_multiplier=100000000  # 100M / 150M doesn't work well
 print(num_nodes(lightning_edges), len(lightning_edges), rene, otto,
     tested_amount, log_probability_cost_multiplier, file=f)
 for lightning_edge in lightning_edges:

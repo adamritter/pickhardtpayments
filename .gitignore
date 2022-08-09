@@ -1,3 +1,8 @@
 
 min_cost
 *.pyc
+
+
+# Added by cargo
+
+/target

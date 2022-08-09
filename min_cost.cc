@@ -1,6 +1,6 @@
 // TODO: add back 0 cost edges for negative cycle, make it work (now buggy :( ))
 // min_cost alternative implementation
-// Usage: g++ min_cost.cc -std=c++17 -O2 -lm -o min_cost && ./min_cost
+// Usage: g++ min_cost.cc -std=c++20 -O2 -lm -o min_cost && ./min_cost
 
 #include <algorithm>
 #include <chrono>
@@ -533,7 +533,7 @@ int find_local_minima(vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_pr
                 print_at(upper+1, edges, log_probability_cost_multiplier);
                 print_at(upper+2, edges, log_probability_cost_multiplier);
             }
-            while(upper>=0 and derivative_at(upper, edges, log_probability_cost_multiplier) == 0) {
+            while(upper>=0 && derivative_at(upper, edges, log_probability_cost_multiplier) == 0) {
                 upper--;
             }
             if(upper<=0) {

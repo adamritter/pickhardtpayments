@@ -11,6 +11,11 @@ using namespace std;
 #include <list>
 #include <algorithm>
 
+
+struct OriginalEdge {
+    int u, v, capacity, cost, flow, guaranteed_liquidity;
+};
+
 std::chrono::steady_clock::time_point now() {
     return std::chrono::steady_clock::now();
 }
@@ -406,19 +411,19 @@ vector<int> spfa2(int n, std::vector<std::pair<int, int>> *adj, std::vector<Edge
 
 
 // i, j, capacity, cost, flow
-long long total_cost(vector<std::tuple<int,int,int,int,int,int> > & lightning_data) {
+long long total_cost(vector<OriginalEdge> & lightning_data) {
     long long r=0;
     for(int i=0; i<lightning_data.size(); i++) {
         auto edge=lightning_data[i];
-        r+=((long long)get<3>(edge))*get<4>(edge);
-        if(get<3>(edge) < 0) {
+        r+=((long long)edge.cost)*edge.flow;
+        if(edge.cost < 0) {
             printf("negative cost!!!!!!\n");
         }
-        if(get<4>(edge) < 0) {
+        if(edge.flow < 0) {
             printf("negative flow!!!!!!\n");
         }
 
-        if(get<4>(edge) > get<2>(edge)) {
+        if(edge.flow > edge.capacity) {
             printf("overflow!!!!!!\n");
         }
     }
@@ -647,7 +652,7 @@ int find_local_minima(vector<pair<Edge2,Edge2>> &edges, float log_probability_co
                     cout << "Error: relative cost should be positive" << endl;
                     return 0;
             }
-        }
+        } // Total cost after optimizations: 0.137132%, p=2.91038e-09%
         // Positive derivative, start process again.
     }
 }
@@ -769,6 +774,7 @@ bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vect
     return true;
 }
 
+
 int main(){
     // read simplified graph
     FILE *F=fopen("lightning.data", "r");
@@ -776,7 +782,7 @@ int main(){
     int N, M, s, t, value;
     int log_probability_cost_multiplier;
     fscanf(F, "%d%d%d%d%d%d", &N, &M, &s, &t, &value, &log_probability_cost_multiplier);  
-    std::vector<std::tuple<int,int,int,int,int,int> > lightning_data; // u, v, capacity, cost, flow=0
+    std::vector<OriginalEdge> lightning_data; // u, v, capacity, cost, flow=0
     char ss[1000];
     auto begin = now();
     for(int i=0; i<M; i++) {
@@ -785,7 +791,8 @@ int main(){
         if(!cost) {
             cost=1;
         }
-        lightning_data.push_back(make_tuple(u, v, capacity, cost, 0, guaranteed_liquidity));
+        OriginalEdge oe {.u=u, .v=v, .capacity=capacity, .cost=cost, .flow=0, .guaranteed_liquidity=guaranteed_liquidity};
+        lightning_data.push_back(oe);
     }
     elapsed("read", begin);
 
@@ -796,16 +803,16 @@ int main(){
     vector<int> edges_with_flow;
     for(int i=0; i<M; i++) {
         auto data=lightning_data[i];
-        edges_with_flow.push_back(g.addEdge(get<0>(data), get<1>(data), get<2>(data)));
+        edges_with_flow.push_back(g.addEdge(data.u, data.v, data.capacity));
     }
 
     cout << "Maximum flow " << g.DinicMaxflow(s, t, value) << endl;
     elapsed("max flow", begin);
     begin = now();
     for(int i=0; i<M; i++) {
-        int u=get<0>(lightning_data[i]);
+        int u=lightning_data[i].u;
         int flow = g.adj[u][edges_with_flow[i]].flow;
-        get<4>(lightning_data[i])=flow;
+        lightning_data[i].flow=flow;
     }
     elapsed("edges_with_flow flow info", begin);
     cout << "Total cost before optimizations: " << total_cost(lightning_data)/1000000.0 << endl;
@@ -819,17 +826,17 @@ int main(){
     for (int i = 0; i < lightning_data.size(); ++i)
     {
         auto data = lightning_data[i];
-        int u=get<0>(data);
-        Edge2 e {get<1>(data), get<2>(data)-get<4>(data), get<3>(data), (int) adj2[get<1>(data)].size(), get<5>(data)};
-        Edge2 er {get<0>(data), get<4>(data), -get<3>(data), (int)  adj2[get<0>(data)].size(), get<5>(data)};
+        int u=data.u, v=data.v;
+        Edge2 e {data.v, data.capacity-data.flow, data.cost, (int) adj2[data.v].size(), data.guaranteed_liquidity};
+        Edge2 er {data.u, data.flow, -data.cost, (int)  adj2[data.u].size(), data.guaranteed_liquidity};
         if(er.remaining_capacity > 0) {
             numneg++;
         }
-        lightning_data_idx.push_back(adj2[get<0>(data)].size());
-        adj2[get<0>(data)].push_back(e);
-        adj2[get<1>(data)].push_back(er);
-        adj[get<0>(data)].push_back(getAdj(e, er, log_probability_cost_multiplier));
-        adj[get<1>(data)].push_back(getAdj(er, e, log_probability_cost_multiplier));
+        lightning_data_idx.push_back(adj2[data.u].size());
+        adj2[u].push_back(e);
+        adj2[v].push_back(er);
+        adj[data.u].push_back(getAdj(e, er, log_probability_cost_multiplier));
+        adj[data.v].push_back(getAdj(er, e, log_probability_cost_multiplier));
     }
     if(debug) {
         cout << "numneg: " << numneg <<endl;
@@ -873,7 +880,7 @@ int main(){
     fprintf(OUT, "%ld\n", lightning_data.size());
     for(int i=0; i<lightning_data.size(); i++) {
         auto data =lightning_data[i];
-        int u=get<0>(data);
+        int u=data.u;
         auto e=adj2[u][lightning_data_idx[i]];
         auto er=adj2[e.v][e.reverse_idx];
         fprintf(OUT, "%d\n", er.remaining_capacity);

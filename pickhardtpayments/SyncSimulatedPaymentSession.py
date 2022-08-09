@@ -62,7 +62,7 @@ class SyncSimulatedPaymentSession():
         self._min_cost_flow=NegativeCircleMinCostSolver()
         f=open("lightning.data", "w")
         print(len(self._uncertainty_network.network.nodes()), len(self._uncertainty_network.network.edges(data="channel")),
-                 self._mcf_id[src], self._mcf_id[dest], int(amt), 100000000, file=f)
+                 self._mcf_id[src], self._mcf_id[dest], int(amt), 150000000, file=f)
 
         self._arc_to_channel = {}
         index=0

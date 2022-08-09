@@ -675,31 +675,12 @@ bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vect
     return true;
 }
 
-
-int main(){
-    // read simplified graph
-    FILE *F=fopen("lightning.data", "r");
-    if(!F) {return -1;}
-    int N, M, s, t, value;
-    int log_probability_cost_multiplier;
-    fscanf(F, "%d%d%d%d%d%d", &N, &M, &s, &t, &value, &log_probability_cost_multiplier);  
-    std::vector<OriginalEdge> lightning_data; // u, v, capacity, cost, flow=0
-    char ss[1000];
-    auto begin = now();
-    for(int i=0; i<M; i++) {
-        int u, v, capacity, cost, guaranteed_liquidity;
-        fscanf(F, "%d%d%d%d%d", &u, &v, &capacity, &cost, &guaranteed_liquidity);
-        if(!cost) {
-            cost=1;
-        }
-        OriginalEdge oe {.u=u, .v=v, .capacity=capacity, .cost=cost, .flow=0, .guaranteed_liquidity=guaranteed_liquidity};
-        lightning_data.push_back(oe);
-    }
-    elapsed("read", begin);
-
+// Sets flow values to min cost flow.
+void min_cost_flow(int N, int s, int t, int value, int log_probability_cost_multiplier,
+        std::vector<OriginalEdge> &lightning_data) {
+    int M=lightning_data.size();
     // Find max path
-
-    begin = now();
+    auto begin = now();
     MaxFlowGraph g(N);
     vector<int> edges_with_flow;
     for(int i=0; i<M; i++) {
@@ -777,14 +758,43 @@ int main(){
     elapsed("total time", begin);  // 2500ms for 0.5 BTC
     cout << rounds << " rounds, satoshis=" << value << endl;
     printf("%d rounds\n", rounds);
-    FILE *OUT=fopen("min_cost.out", "w");
-    fprintf(OUT, "%ld\n", lightning_data.size());
     for(int i=0; i<lightning_data.size(); i++) {
         auto data =lightning_data[i];
         int u=data.u;
         auto e=adj2[u][lightning_data_idx[i]];
         auto er=adj2[e.v][e.reverse_idx];
-        fprintf(OUT, "%d\n", er.remaining_capacity);
+        lightning_data[i].flow=er.remaining_capacity;
+    }
+}
+
+
+int main(){
+    // read simplified graph
+    FILE *F=fopen("lightning.data", "r");
+    if(!F) {return -1;}
+    int N, M, s, t, value;
+    int log_probability_cost_multiplier;
+    fscanf(F, "%d%d%d%d%d%d", &N, &M, &s, &t, &value, &log_probability_cost_multiplier);  
+    std::vector<OriginalEdge> lightning_data; // u, v, capacity, cost, flow=0
+    char ss[1000];
+    auto begin = now();
+    for(int i=0; i<M; i++) {
+        int u, v, capacity, cost, guaranteed_liquidity;
+        fscanf(F, "%d%d%d%d%d", &u, &v, &capacity, &cost, &guaranteed_liquidity);
+        if(!cost) {
+            cost=1;
+        }
+        OriginalEdge oe {.u=u, .v=v, .capacity=capacity, .cost=cost, .flow=0, .guaranteed_liquidity=guaranteed_liquidity};
+        lightning_data.push_back(oe);
+    }
+    elapsed("read", begin);
+
+    min_cost_flow(N, s, t, value, log_probability_cost_multiplier, lightning_data);
+
+    FILE *OUT=fopen("min_cost.out", "w");
+    fprintf(OUT, "%ld\n", lightning_data.size());
+    for(int i=0; i<lightning_data.size(); i++) {
+        fprintf(OUT, "%d\n", lightning_data[i].flow);
     }
     fclose(OUT);
 

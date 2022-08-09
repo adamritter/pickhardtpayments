@@ -11,9 +11,6 @@ using namespace std;
 #include <list>
 #include <algorithm>
 
-int crc(int a, int b) {
-    return (a * 17) ^ (b*3);
-}
 std::chrono::steady_clock::time_point now() {
     return std::chrono::steady_clock::now();
 }
@@ -170,7 +167,6 @@ int Graph::DinicMaxflow(int s, int t, int limit)
         return -1;
  
     int total = 0; // Initialize result
-    int ccc=0, ccc2=0;
  
     // Augment the flow while there is path
     // from source to sink
@@ -184,14 +180,6 @@ int Graph::DinicMaxflow(int s, int t, int limit)
  
             // Add path flow to overall flow
             total += flow;
-            for(int i=0; i< V; i++) {
-                ccc=crc(ccc, level[i]);
-            }
-            for(int i=0; i< V; i++) {
-                for(int j=0; j<adj[i].size(); j++)
-                    ccc2=crc(ccc2, adj[i][j].flow);
-            }
-            printf("dinic ccc %d, ccc2 %d\n", ccc, ccc2);
         }
     }
  
@@ -525,9 +513,9 @@ long long relative_cost_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_p
         return r;
 }
 
+const bool debug=false;
 long long derivative_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_probability_cost_multiplier) {
     long long r=0;
-    bool debug=false;
     if(debug)
     cout << "at: " << at << endl;
     for(int i=0; i<edges.size(); i++) {
@@ -557,22 +545,6 @@ long long derivative_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_prob
 void print_at(int at, vector<pair<Edge2,Edge2>> &edges, float log_probability_cost_multiplier) {
     cout << "  at " << at << " derivative: " << derivative_at(at, edges, log_probability_cost_multiplier)
         << ", relative cost: " << relative_cost_at(at, edges, log_probability_cost_multiplier) << endl; 
-    // More debug info:
-    const bool debug=false;
-    if(debug) {
-        cout << "adj costs: ";
-        for(int i=0; i<edges.size(); i++) {
-            auto e=edges[i].first, er=edges[i].second;
-            auto e2=e, er2=er;
-            e2.remaining_capacity-=1; er2.remaining_capacity+=1;
-            cout <<  getAdj(e, er, log_probability_cost_multiplier).second 
-            << ", dminuslp: " << dminus_log_probability(e, er)
-            << ", minuslogp: " << minus_log_probability(e, er)
-            << ", minuslogp1: " << minus_log_probability(e2, er2)
-            << "; ";
-        }
-        cout << endl;
-    }
 }
 
 int find_local_minima(vector<pair<Edge2,Edge2>> &edges, float log_probability_cost_multiplier,
@@ -595,7 +567,7 @@ int find_local_minima(vector<pair<Edge2,Edge2>> &edges, float log_probability_co
         print_at(min_capacity, edges, log_probability_cost_multiplier);
     }
     if(derivative_at(0, edges, log_probability_cost_multiplier) >= 0) {
-        cout << "Not negative circle!!!!!!";
+        cout << "Not negative cycle!!!!!!";
         return 0;
     }
     if(derivative_at(min_capacity, edges, log_probability_cost_multiplier) <=0) {
@@ -683,28 +655,29 @@ int find_local_minima(vector<pair<Edge2,Edge2>> &edges, float log_probability_co
 // TODO: decrease min_capacity by finding 0 derivative???
 bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vector<Edge2> *adj2,
     float log_probability_cost_multiplier) {
-        bool debug=false;
     // Find negative cycle
     
     auto begin=now();
-    vector<int> negative_circle=spfa_early_terminate(N, adj, adj2);
-    elapsed("early terminate negative_circle", begin);
+    vector<int> negative_cycle=spfa_early_terminate(N, adj, adj2);
+    // elapsed("early terminate negative_cycle", begin);
     begin=now();
-	cout << "early terminate negative_circle: " << negative_circle.size() << endl;
+    if(debug)
+	    cout << "early terminate negative_cycle: " << negative_cycle.size() << endl;
     vector<int> min_costs;
     int min_capacity=INT32_MAX;
     vector<int> min_cost_idxs;
     vector<pair<Edge2,Edge2> > edges;
 
     if(debug) cout << "Possible edges:" << endl;
-    for(int i=0; i<negative_circle.size(); i++) {
-        int u=negative_circle[i], v=negative_circle[(i+1)%negative_circle.size()];
+    for(int i=0; i<negative_cycle.size(); i++) {
+        int u=negative_cycle[i], v=negative_cycle[(i+1)%negative_cycle.size()];
         if(debug) cout << "  " << u << "->" << v << ": costs=";
         auto edges_from = adj[u];
         int min_cost=INT32_MAX;
         int min_cost_idx=-1;
         for (int j=0; j<edges_from.size(); j++) {
             if(edges_from[j].first==v) {
+                if(debug)
                 cout << edges_from[j].second << "; ";
                 if(edges_from[j].second < min_cost) {
                     min_cost=edges_from[j].second;
@@ -712,6 +685,7 @@ bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vect
                 }
             }
         }
+        if(debug)
         cout << endl;
         if(min_cost_idx==-1) {
             printf("min_cost_idx==-1!!!!!");
@@ -732,6 +706,7 @@ bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vect
         return false;
     }
     if(log_probability_cost_multiplier >= 0) {
+        if(debug)
         cout << "Derivative at 0: " << derivative_at(0, edges, log_probability_cost_multiplier)
             << ", relative cost at 0: " << relative_cost_at(0, edges, log_probability_cost_multiplier)
             << ", relative cost at 1: " << relative_cost_at(1, edges, log_probability_cost_multiplier)
@@ -742,6 +717,7 @@ bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vect
         // min_capacity=(relative_cost_at(floor(fmin_capacity), edges, log_probability_cost_multiplier) <
                         // relative_cost_at(floor(fmin_capacity)+1, edges, log_probability_cost_multiplier))
                         // ? floor(fmin_capacity) : (floor(fmin_capacity)+1);
+        if(debug)
          cout << "Find local minima returned " << min_capacity << 
             ", derivative at 0: " << derivative_at(0, edges, log_probability_cost_multiplier)
             << ", derivative at new min capacity(" << min_capacity << "): " 
@@ -762,7 +738,7 @@ bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vect
          << endl;
 
     for(int i=0; i<min_cost_idxs.size(); i++) {
-        int u=negative_circle[i];
+        int u=negative_cycle[i];
         if(adj2[u].size()<=min_cost_idxs[i]) {
             cout << "Bad index2!!!!!";
             return false;
@@ -788,20 +764,18 @@ bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vect
         adj_total_mlog_prob(N, adj2) << "*" << log_probability_cost_multiplier << "=" <<
         adj_total_cost(N, adj2)+adj_total_mlog_prob(N, adj2)*log_probability_cost_multiplier
          << endl;
-    elapsed("decreased total cost rest", begin);
+    // elapsed("decreased total cost rest", begin);
 
     return true;
 }
 
 int main(){
     // read simplified graph
-    int ccc=0;
     FILE *F=fopen("lightning.data", "r");
     if(!F) {return -1;}
     int N, M, s, t, value;
     int log_probability_cost_multiplier;
     fscanf(F, "%d%d%d%d%d%d", &N, &M, &s, &t, &value, &log_probability_cost_multiplier);  
-    ccc=crc(crc(N, M), crc(crc(s, t), value));
     std::vector<std::tuple<int,int,int,int,int,int> > lightning_data; // u, v, capacity, cost, flow=0
     char ss[1000];
     auto begin = now();
@@ -811,10 +785,8 @@ int main(){
         if(!cost) {
             cost=1;
         }
-        ccc=crc(ccc, crc(crc(u, v), crc(capacity, cost)));
         lightning_data.push_back(make_tuple(u, v, capacity, cost, 0, guaranteed_liquidity));
     }
-    cout << "ccc " << ccc << endl;
     elapsed("read", begin);
 
     // Find max path
@@ -834,11 +806,9 @@ int main(){
         int u=get<0>(lightning_data[i]);
         int flow = g.adj[u][edges_with_flow[i]].flow;
         get<4>(lightning_data[i])=flow;
-        ccc=crc(ccc, flow);
     }
     elapsed("edges_with_flow flow info", begin);
-    cout << "ccc flow " << ccc << endl;
-    cout << "total cost " << total_cost(lightning_data)/1000000.0 << endl;
+    cout << "Total cost before optimizations: " << total_cost(lightning_data)/1000000.0 << endl;
     int rounds=0;
 
     begin=now();
@@ -861,8 +831,10 @@ int main(){
         adj[get<0>(data)].push_back(getAdj(e, er, log_probability_cost_multiplier));
         adj[get<1>(data)].push_back(getAdj(er, e, log_probability_cost_multiplier));
     }
-    cout << "numneg: " << numneg <<endl;
-    cout << "adj_total_cost: " << adj_total_cost(N, adj2)/value*100.0 << "%" << endl;
+    if(debug) {
+        cout << "numneg: " << numneg <<endl;
+        cout << "adj_total_cost: " << adj_total_cost(N, adj2)/value*100.0 << "%" << endl;
+    }
     elapsed("setup early terminate", begin);
     long long cost_after_0=adj_total_cost(N, adj2)/1000000.0, cost_after_100=0, cost_after_200=0, cost_after_400=0;
     float  p_after_100=0, p_after_200=0, p_after_400=0;
@@ -881,6 +853,7 @@ int main(){
             cost_after_400=adj_total_cost(N, adj2)/1000000.0;
             p_after_400=exp2(-adj_total_mlog_prob(N, adj2));
         }
+        if(debug)
         cout << "total cost " << adj_total_cost(N, adj2)/1000000.0/value*100.0 << "%" << endl;
         rounds++;
         if(distance.count()>2000) {
@@ -888,7 +861,7 @@ int main(){
             break;
         }
     }
-    cout << "total cost " << adj_total_cost(N, adj2)/1000000.0/value*100.0 << "%, p=" << exp2(-adj_total_mlog_prob(N, adj2))*100 <<"%" << endl; // 0.1351%
+    cout << "Total cost after optimizations: " << adj_total_cost(N, adj2)/1000000.0/value*100.0 << "%, p=" << exp2(-adj_total_mlog_prob(N, adj2))*100 <<"%" << endl; // 0.1351%
     cout << "cost after 0 rounds: " << cost_after_0*1.0/value*100.0 << "%" << endl;  // 0.1404%
     cout << "cost after 100: " << cost_after_100*1.0/value*100.0 << "%, p=" << p_after_100*100 <<"%" << endl;  // 0.1404%
     cout << "cost after 200: " << cost_after_200*1.0/value*100.0 << "%, p=" << p_after_200*100 <<"%"<< endl;  // 0.1404%

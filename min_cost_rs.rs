@@ -3,9 +3,9 @@
 // Usage: cargo run  --bin min_cost_rs --release
 
 #[derive(Clone)]
-struct OriginalEdge {
-    u: Vindex,
-    v: Vindex,
+pub struct OriginalEdge {
+    u: usize,
+    v: usize,
     capacity: i32,
     cost: i32,
     flow: i32,
@@ -746,8 +746,11 @@ fn decrease_total_cost( N:Vindex,adj:&mut Vec<Vec<(Vindex, i32)>>,adj2:&mut Vec<
 }
 
 // Sets flow values to min cost flow.
-fn min_cost_flow(N: Vindex, s: Vindex, t: Vindex, value: i32, log_probability_cost_multiplier: i32,
+pub fn min_cost_flow(n: usize, s: usize, t: usize, value: i32, log_probability_cost_multiplier: i32,
     lightning_data: &mut Vec<OriginalEdge>, cost_scaling: i32) {
+        let nv=Vindex::from_usize(n);
+        let sv=Vindex::from_usize(s);
+        let tv=Vindex::from_usize(t);
        let scaled_log_probability_cost_multiplier=log_probability_cost_multiplier*cost_scaling;
     // let mut ccc=0;
     for l in &mut *lightning_data {
@@ -762,14 +765,14 @@ fn min_cost_flow(N: Vindex, s: Vindex, t: Vindex, value: i32, log_probability_co
     let M=lightning_data.len();
     // Find max path
     let begin = Instant::now();
-    let mut g=MaxFlowGraph::new(N);
+    let mut g=MaxFlowGraph::new(nv);
     let mut edges_with_flow:Vec<Vindex>=Vec::new();
     for i in 0..M {
         let data=&lightning_data[i];
-        edges_with_flow.push(g.addEdge(data.u, data.v, data.capacity));
+        edges_with_flow.push(g.addEdge(Vindex::from_usize(data.u), Vindex::from_usize(data.v), data.capacity));
     }
 
-    println!("Maximum flow {}", g.DinicMaxflow(s, t, value));
+    println!("Maximum flow {}", g.DinicMaxflow(sv, tv, value));
     elapsed("max flow", begin);
     let begin = Instant::now();
     for i in 0..M {
@@ -778,11 +781,6 @@ fn min_cost_flow(N: Vindex, s: Vindex, t: Vindex, value: i32, log_probability_co
         lightning_data[i].flow=flow;
     }
     elapsed("edges_with_flow flow info", begin);
-    let mut ccc=0;
-    for l in &*lightning_data {
-        ccc= crc(crc(crc(crc(crc(crc(ccc, l.u.value), l.v.value), l.capacity), l.cost), l.flow), l.guaranteed_liquidity);
-    }
-    println!("lightning_data after flow crc {}", ccc);
 
     println!("Total cost before optimizations: {}", total_cost(lightning_data));
     let mut rounds=0;
@@ -790,7 +788,7 @@ fn min_cost_flow(N: Vindex, s: Vindex, t: Vindex, value: i32, log_probability_co
     let begin=Instant::now();
     let mut adj:Vec<Vec<(Vindex,i32)>>=Vec::new(); // v, cost
     let mut adj2: Vec<Vec<MinCostEdge>>=Vec::new(); // flow, capacity  // same for negative for now
-    for i in 0..N.as_usize() {
+    for i in 0..n {
         adj.push(Vec::new());
         adj2.push(Vec::new());
     }
@@ -801,9 +799,9 @@ fn min_cost_flow(N: Vindex, s: Vindex, t: Vindex, value: i32, log_probability_co
         let data  = &lightning_data[i];
         let u=data.u;
         let v=data.v;
-        let e:MinCostEdge =MinCostEdge {v:data.v, remaining_capacity: data.capacity-data.flow, cost: data.cost,
+        let e:MinCostEdge =MinCostEdge {v:Vindex::from_usize(data.v), remaining_capacity: data.capacity-data.flow, cost: data.cost,
              reverse_idx: adj2[data.v].lenv(), guaranteed_liquidity:data.guaranteed_liquidity};
-        let er=MinCostEdge {v:data.u, remaining_capacity:data.flow, cost: -data.cost,  reverse_idx: adj2[data.u].lenv(),
+        let er=MinCostEdge {v:Vindex::from_usize(data.u), remaining_capacity:data.flow, cost: -data.cost,  reverse_idx: adj2[data.u].lenv(),
                 guaranteed_liquidity: data.guaranteed_liquidity};
         if(er.remaining_capacity > 0) {
             numneg+=1;
@@ -834,27 +832,27 @@ fn min_cost_flow(N: Vindex, s: Vindex, t: Vindex, value: i32, log_probability_co
     //     cout << "adj_total_cost: " << adj_total_cost(N, adj2)/value*100.0 << "%" << endl;
     // }
     elapsed("setup early terminate", begin);
-    let mut cost_after_0=adj_total_cost(N, &adj2)/1000000;
+    let mut cost_after_0=adj_total_cost(nv, &adj2)/1000000;
     let mut cost_after_100:i64=0;
     let mut cost_after_200:i64=0;
     let mut cost_after_400:i64=0;
     let mut p_after_100=0.0;
     let mut p_after_200=0.0;
     let mut p_after_400=0.0;
-    while(decrease_total_cost(N, &mut adj, &mut adj2, scaled_log_probability_cost_multiplier as f32)) {
+    while(decrease_total_cost(nv, &mut adj, &mut adj2, scaled_log_probability_cost_multiplier as f32)) {
         let distance:Duration=begin.elapsed();
         if(cost_after_100==0 && distance.as_millis()>100) {
-            cost_after_100=adj_total_cost(N, &adj2)/1000000;
-            p_after_100=(-adj_total_mlog_prob(N, &adj2)).exp2();
+            cost_after_100=adj_total_cost(nv, &adj2)/1000000;
+            p_after_100=(-adj_total_mlog_prob(nv, &adj2)).exp2();
         }
         if(cost_after_200==0 && distance.as_millis()>200) {
-            cost_after_200=adj_total_cost(N, &adj2)/1000000;
-            p_after_200=(-adj_total_mlog_prob(N, &adj2)).exp2();
+            cost_after_200=adj_total_cost(nv, &adj2)/1000000;
+            p_after_200=(-adj_total_mlog_prob(nv, &adj2)).exp2();
 
         }
         if(cost_after_400==0 && distance.as_millis()>400) {
-            cost_after_400=adj_total_cost(N, &adj2)/1000000;
-            p_after_400=(-adj_total_mlog_prob(N, &adj2)).exp2();
+            cost_after_400=adj_total_cost(nv, &adj2)/1000000;
+            p_after_400=(-adj_total_mlog_prob(nv, &adj2)).exp2();
         }
         // if(debug) {
         //     cout << "total cost " << adj_total_cost(N, adj2)/1000000.0/value*100.0 << "%" << endl;
@@ -866,8 +864,8 @@ fn min_cost_flow(N: Vindex, s: Vindex, t: Vindex, value: i32, log_probability_co
         }
     }
     println!("Total cost after optimizations: {}%, p={}%",
-        adj_total_cost(N, &adj2) as f32/cost_scaling as f32/1000000.0/value as f32*100.0,
-        (-adj_total_mlog_prob(N, &adj2)).exp2()*100.0);
+        adj_total_cost(nv, &adj2) as f32/cost_scaling as f32/1000000.0/value as f32*100.0,
+        (-adj_total_mlog_prob(nv, &adj2)).exp2()*100.0);
     println!("cost after 0 rounds: {}%", (cost_after_0/cost_scaling as i64) as f32*1.0/value as f32*100.0);  // 0.1404%)
     println!("cost after 100: {}%, p={}%", (cost_after_100/cost_scaling as i64) as f32/value as f32*100.0, p_after_100*100.0);
     println!("cost after 200: {}%, p={}%", (cost_after_200/cost_scaling as i64) as f32/value as f32*100.0, p_after_200*100.0);
@@ -890,10 +888,10 @@ use std::io::{Write};
 use regex::Regex;
 fn main(){
     // read simplified graph
-    let mut N:Vindex=Vindex::new(-1);
-    let mut M: Vindex=Vindex::new(-1);
-    let mut s:Vindex=Vindex::new(-1);
-    let mut t:Vindex=Vindex::new(-1);
+    let mut N=0 as usize;
+    let mut M=0 as usize;
+    let mut s=0 as usize;
+    let mut t=0 as usize;
     let mut value:i32=-1;
     let mut log_probability_cost_multiplier: i32=-1;
     let begin = Instant::now();
@@ -904,13 +902,13 @@ fn main(){
     let num5=Regex::new(r"(\d+)\W+(\d+)\W+(\d+)\W+(\d+)\W+(\d+)").unwrap();
     let mut header_read=false;
     let mut lightning_data:Vec<OriginalEdge>=Vec::new(); // u, v, capacity, cost, flow=0
-    let mut i=-1;
+    let mut i:i32=-1;
     for line in lines {
         if(i>=0) {
             let l=line.unwrap();
             let mat=num5.captures(l.as_str()).unwrap();
-            let u=Vindex::new(mat.get(1).unwrap().as_str().parse::<i32>().unwrap());
-            let v=Vindex::new(mat.get(2).unwrap().as_str().parse::<i32>().unwrap());
+            let u=(mat.get(1).unwrap().as_str().parse::<i32>().unwrap()) as usize;
+            let v=(mat.get(2).unwrap().as_str().parse::<i32>().unwrap()) as usize;
             let capacity=(mat.get(3).unwrap().as_str().parse::<i32>().unwrap());
             let mut cost=(mat.get(4).unwrap().as_str().parse::<i32>().unwrap());
             let guaranteed_liquidity=(mat.get(5).unwrap().as_str().parse::<i32>().unwrap());
@@ -919,17 +917,17 @@ fn main(){
             }
             lightning_data.push(OriginalEdge {u, v, capacity, cost, flow: 0, guaranteed_liquidity});
             i+=1;
-            if i>=M.value {
+            if i>=M as i32 {
                 break;
             }
         } else {
             let mut lu=line.unwrap();
             println!("lu: {}", lu);
             let mat=num6.captures(lu.as_str()).unwrap();
-            N=Vindex::new(mat.get(1).unwrap().as_str().parse::<i32>().unwrap());
-            M=Vindex::new(mat.get(2).unwrap().as_str().parse::<i32>().unwrap());
-            s=Vindex::new(mat.get(3).unwrap().as_str().parse::<i32>().unwrap());
-            t=Vindex::new(mat.get(4).unwrap().as_str().parse::<i32>().unwrap());
+            N=(mat.get(1).unwrap().as_str().parse::<i32>().unwrap()) as usize;
+            M=(mat.get(2).unwrap().as_str().parse::<i32>().unwrap()) as usize;
+            s=(mat.get(3).unwrap().as_str().parse::<i32>().unwrap()) as usize;
+            t=(mat.get(4).unwrap().as_str().parse::<i32>().unwrap()) as usize;
             value=mat.get(5).unwrap().as_str().parse::<i32>().unwrap();
             log_probability_cost_multiplier=mat.get(6).unwrap().as_str().parse::<i32>().unwrap();
             i=0;

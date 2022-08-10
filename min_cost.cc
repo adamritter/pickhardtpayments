@@ -17,6 +17,10 @@ struct OriginalEdge {
     int u, v, capacity, cost, flow, guaranteed_liquidity;
 };
 
+int crc(int a, int b) {
+    return (a * 17) ^ (b*3);
+}
+
 std::chrono::steady_clock::time_point now() {
     return std::chrono::steady_clock::now();
 }
@@ -352,7 +356,7 @@ float minus_log_probability(MinCostEdge e, MinCostEdge er) {
     if(use_guaranteed_capacity && from_total+e.guaranteed_liquidity>=capacity) {
         return 0.0;
     }
-    float p=(float(from_total)+1)/(capacity-e.guaranteed_liquidity+1);
+    float p=(float(from_total+1))/(capacity-e.guaranteed_liquidity+1);
     return -log2(p);  
 }
 
@@ -383,19 +387,37 @@ float dminus_log_probability(MinCostEdge e, MinCostEdge er) {
     return 1.0/float(from_total)/log2inv;
 }
 
-pair<int,int> getAdj(MinCostEdge e, MinCostEdge er, float log_probability_cost_multiplier) {
+int getCost(MinCostEdge e, MinCostEdge er, float log_probability_cost_multiplier) {
     if(e.remaining_capacity==0) {
-        return make_pair(e.v, INT32_MAX/2);
+        return INT32_MAX/2;
     }
-    int cost = e.cost;
+    long long cost = e.cost;
     if(log_probability_cost_multiplier >= 0) {
         MinCostEdge e2=e, er2=er;
         e2.remaining_capacity-=1;
         er2.remaining_capacity+=1;
-        cost+=round(log_probability_cost_multiplier*(minus_log_probability(e2, er2)));
-        cost-=round(log_probability_cost_multiplier*(minus_log_probability(e, er)));
+
+
+        // cost+=int(0.5+((log_probability_cost_multiplier*(
+            // (float(e2.remaining_capacity)+1.0)/float(e2.remaining_capacity)))));
+
+        cost+=((long long )round(log_probability_cost_multiplier*(minus_log_probability(e2, er2))));
+        cost-=((long long)round(log_probability_cost_multiplier*(minus_log_probability(e, er))));
     }
-    return make_pair(e.v, cost);
+    // printf("getadj returning %d %d\n", e.v, cost);
+    if(cost > INT32_MAX/2) {
+        printf("WARNING!!!!!   HUGE getCost!!!!\n");
+        return INT32_MAX/2;
+    }
+     if(cost > INT32_MAX/2) {
+        printf("WARNING!!!!!   HUGE getCost!!!!\n");
+        return INT32_MAX/2;
+    }
+    return int(cost);
+}
+
+pair<int,int> getAdj(MinCostEdge e, MinCostEdge er, float log_probability_cost_multiplier) {
+    return make_pair(e.v, getCost(e, er, log_probability_cost_multiplier));
 }
 
 long long relative_cost_at(int at, vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_probability_cost_multiplier) {
@@ -408,9 +430,14 @@ long long relative_cost_at(int at, vector<pair<MinCostEdge,MinCostEdge>> &edges,
             MinCostEdge er2=er;
             e2.remaining_capacity-=at;
             er2.remaining_capacity+=at;
-            r+=round(log_probability_cost_multiplier*(minus_log_probability(e2, er2)));
-            r-=round(log_probability_cost_multiplier*(minus_log_probability(e, er)));
+            r+=((long long)round(log_probability_cost_multiplier*(minus_log_probability(e2, er2))));
+            r-=((long long)round(log_probability_cost_multiplier*(minus_log_probability(e, er))));
+            // cout << endl << "relative_cost_at i=" << i << ", r=" << r << ", cost=" << e.cost << ", at: "<< at
+            //     << ", round1=" <<  (long long)round(log_probability_cost_multiplier*(minus_log_probability(e2, er2)))
+            //     << ", round2=" << (long long) round(log_probability_cost_multiplier*(minus_log_probability(e, er)))
+            //     << endl;
         }
+        // cout << "relative_cost_at returning r=" << r << endl;
         return r;
 }
 
@@ -440,6 +467,13 @@ long long derivative_at(int at, vector<pair<MinCostEdge,MinCostEdge>> &edges, fl
     return r;
 }
 
+long long derivative2_at(int at, vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_probability_cost_multiplier) {
+    return relative_cost_at(at+1, edges, log_probability_cost_multiplier)-
+        relative_cost_at(at, edges, log_probability_cost_multiplier);
+
+}
+
+
 
 // Returns a non-negative local minima on a negative cycle. Returns a number between 0 and min_capacity.
 // Derivative at 0 should be negative, relative cost at 0.1 negative as well.
@@ -451,6 +485,13 @@ long long derivative_at(int at, vector<pair<MinCostEdge,MinCostEdge>> &edges, fl
 void print_at(int at, vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_probability_cost_multiplier) {
     cout << "  at " << at << " derivative: " << derivative_at(at, edges, log_probability_cost_multiplier)
         << ", relative cost: " << relative_cost_at(at, edges, log_probability_cost_multiplier) << endl; 
+    cout << "    ";
+    for(auto e : edges) {
+        vector<pair<MinCostEdge,MinCostEdge>> v{e};
+        cout << relative_cost_at(1, v, log_probability_cost_multiplier) << " ";
+        cout << getAdj(e.first, e.second, log_probability_cost_multiplier).second << " ";
+    }
+    cout << endl;
 }
 
 int find_local_minima(vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_probability_cost_multiplier,
@@ -472,12 +513,15 @@ int find_local_minima(vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_pr
         print_at(5, edges, log_probability_cost_multiplier);
         print_at(min_capacity, edges, log_probability_cost_multiplier);
     }
-    if(derivative_at(0, edges, log_probability_cost_multiplier) >= 0) {
+    if(derivative2_at(0, edges, log_probability_cost_multiplier) >= 0) {
+        print_at(0, edges, log_probability_cost_multiplier);
+        print_at(1, edges, log_probability_cost_multiplier);
         cout << "Not negative cycle!!!!!!";
         return 0;
     }
     if(derivative_at(min_capacity, edges, log_probability_cost_multiplier) <=0) {
         cout << "Not positive at min_capacity!!!!!!";
+
         return 0;
     }
     int upper=min_capacity;
@@ -487,7 +531,7 @@ int find_local_minima(vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_pr
         while(upper>lower) {
             int mid=(lower+upper)/2;
             // cout << "mid " << mid << endl;
-            if(derivative_at(mid, edges, log_probability_cost_multiplier) <= 0) {
+            if(derivative2_at(mid, edges, log_probability_cost_multiplier) <= 0) {
                 lower=mid;
                 if(upper==lower+1) {
                     upper--;
@@ -533,7 +577,7 @@ int find_local_minima(vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_pr
                 print_at(upper+1, edges, log_probability_cost_multiplier);
                 print_at(upper+2, edges, log_probability_cost_multiplier);
             }
-            while(upper>=0 && derivative_at(upper, edges, log_probability_cost_multiplier) == 0) {
+            while(upper>=0 && derivative2_at(upper, edges, log_probability_cost_multiplier) == 0) {
                 upper--;
             }
             if(upper<=0) {
@@ -544,7 +588,7 @@ int find_local_minima(vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_pr
                 }
                 return upper;
             }
-            if(derivative_at(upper, edges, log_probability_cost_multiplier) > 0) {
+            if(derivative2_at(upper, edges, log_probability_cost_multiplier) > 0) {
                 break;
             }
             // negative derivative while negative relative cost found.
@@ -562,8 +606,15 @@ int find_local_minima(vector<pair<MinCostEdge,MinCostEdge>> &edges, float log_pr
 bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vector<MinCostEdge> *adj2,
     float log_probability_cost_multiplier) {
     // Find negative cycle
-    
+    const bool debug=false;
     auto begin=now();
+    int ccc=N;
+    for(int i=0;i<N; i++) {
+        for(int j=0; j<adj[i].size(); j++) {
+            ccc=crc(crc(ccc, adj[i][j].first), adj[i][j].second);
+        }
+    }
+    // printf("adj ccc %d\n", ccc);
     vector<int> negative_cycle=spfa_early_terminate(N, adj, adj2);
     // elapsed("early terminate negative_cycle", begin);
     begin=now();
@@ -674,10 +725,20 @@ bool decrease_total_cost(int N, std::vector<std::pair<int, int>> *adj, std::vect
 
     return true;
 }
+const int c=10;
 
 // Sets flow values to min cost flow.
 void min_cost_flow(int N, int s, int t, int value, int log_probability_cost_multiplier,
         std::vector<OriginalEdge> &lightning_data) {
+    int ccc=0;
+    int max_cost=0;
+    for(auto l : lightning_data) {
+        ccc= crc(crc(crc(crc(crc(crc(ccc, l.u), l.v), l.capacity), l.cost), l.flow), l.guaranteed_liquidity);
+        if(l.cost > max_cost) max_cost=l.cost;
+    }
+    printf("Max cost: %d, maxint: %d\n", max_cost, INT32_MAX); // Division: 700 for c=3
+    printf("lightning_data after read crc %d\n", ccc);
+
     int M=lightning_data.size();
     // Find max path
     auto begin = now();
@@ -697,7 +758,13 @@ void min_cost_flow(int N, int s, int t, int value, int log_probability_cost_mult
         lightning_data[i].flow=flow;
     }
     elapsed("edges_with_flow flow info", begin);
-    cout << "Total cost before optimizations: " << total_cost(lightning_data)/1000000.0 << endl;
+      ccc=0;
+    for(auto l : lightning_data) {
+        ccc= crc(crc(crc(crc(crc(crc(ccc, l.u), l.v), l.capacity), l.cost), l.flow), l.guaranteed_liquidity);
+    }
+    printf("lightning_data after flow crc %d\n", ccc);
+
+    cout << "Total cost before optimizations: " << total_cost(lightning_data) << endl;
     int rounds=0;
 
     begin=now();
@@ -720,10 +787,26 @@ void min_cost_flow(int N, int s, int t, int value, int log_probability_cost_mult
         adj[data.u].push_back(getAdj(e, er, log_probability_cost_multiplier));
         adj[data.v].push_back(getAdj(er, e, log_probability_cost_multiplier));
     }
-    if(debug) {
-        cout << "numneg: " << numneg <<endl;
-        cout << "adj_total_cost: " << adj_total_cost(N, adj2)/value*100.0 << "%" << endl;
+     ccc=0;
+    for(int i=0;i<N; i++) {
+        for(int j=0; j<adj[i].size(); j++) {
+            ccc=crc(crc(ccc, adj[i][j].first), adj[i][j].second);
+        }
     }
+    printf("adj0 ccc %d\n", ccc);
+    // if(debug) {
+        // cout << "numneg: " << numneg <<endl;
+        // cout << "adj_total_cost: " << adj_total_cost(N, adj2)/value*100.0 << "%" << endl;
+    // }
+    ccc=0;
+    for(auto i :  adj2) {
+        for(auto j : i) {
+            ccc=crc(crc(ccc, j.remaining_capacity), j.reverse_idx);
+        }
+    }
+    printf("adj20 ccc %d\n", ccc);
+    // return;
+
     elapsed("setup early terminate", begin);
     long long cost_after_0=adj_total_cost(N, adj2)/1000000.0, cost_after_100=0, cost_after_200=0, cost_after_400=0;
     float  p_after_100=0, p_after_200=0, p_after_400=0;
@@ -750,11 +833,11 @@ void min_cost_flow(int N, int s, int t, int value, int log_probability_cost_mult
             break;
         }
     }
-    cout << "Total cost after optimizations: " << adj_total_cost(N, adj2)/1000000.0/value*100.0 << "%, p=" << exp2(-adj_total_mlog_prob(N, adj2))*100 <<"%" << endl; // 0.1351%
-    cout << "cost after 0 rounds: " << cost_after_0*1.0/value*100.0 << "%" << endl;  // 0.1404%
-    cout << "cost after 100: " << cost_after_100*1.0/value*100.0 << "%, p=" << p_after_100*100 <<"%" << endl;  // 0.1404%
-    cout << "cost after 200: " << cost_after_200*1.0/value*100.0 << "%, p=" << p_after_200*100 <<"%"<< endl;  // 0.1404%
-    cout << "cost after 400: " << cost_after_400*1.0/value*100.0 << "%, p=" << p_after_400*100 <<"%" << endl;  // 0.1404%
+    cout << "Total cost after optimizations: " << adj_total_cost(N, adj2)/1000000.0/value*100.0/c << "%, p=" << exp2(-adj_total_mlog_prob(N, adj2))*100 <<"%" << endl; // 0.1351%
+    cout << "cost after 0 rounds: " << cost_after_0*1.0/value*100.0/c << "%" << endl;  // 0.1404%
+    cout << "cost after 100: " << cost_after_100*1.0/value*100.0/c << "%, p=" << p_after_100*100 <<"%" << endl;  // 0.1404%
+    cout << "cost after 200: " << cost_after_200*1.0/value*100.0/c << "%, p=" << p_after_200*100 <<"%"<< endl;  // 0.1404%
+    cout << "cost after 400: " << cost_after_400*1.0/value*100.0/c << "%, p=" << p_after_400*100 <<"%" << endl;  // 0.1404%
     elapsed("total time", begin);  // 2500ms for 0.5 BTC
     cout << rounds << " rounds, satoshis=" << value << endl;
     printf("%d rounds\n", rounds);
@@ -776,20 +859,20 @@ int main(){
     int log_probability_cost_multiplier;
     fscanf(F, "%d%d%d%d%d%d", &N, &M, &s, &t, &value, &log_probability_cost_multiplier);  
     std::vector<OriginalEdge> lightning_data; // u, v, capacity, cost, flow=0
-    char ss[1000];
     auto begin = now();
     for(int i=0; i<M; i++) {
         int u, v, capacity, cost, guaranteed_liquidity;
         fscanf(F, "%d%d%d%d%d", &u, &v, &capacity, &cost, &guaranteed_liquidity);
+       
+        OriginalEdge oe {.u=u, .v=v, .capacity=capacity, .cost=cost*c, .flow=0, .guaranteed_liquidity=guaranteed_liquidity};
         if(!cost) {
-            cost=1;
+            oe.cost=1;
         }
-        OriginalEdge oe {.u=u, .v=v, .capacity=capacity, .cost=cost, .flow=0, .guaranteed_liquidity=guaranteed_liquidity};
         lightning_data.push_back(oe);
     }
     elapsed("read", begin);
 
-    min_cost_flow(N, s, t, value, log_probability_cost_multiplier, lightning_data);
+    min_cost_flow(N, s, t, value, log_probability_cost_multiplier*c, lightning_data);
 
     FILE *OUT=fopen("min_cost.out", "w");
     fprintf(OUT, "%ld\n", lightning_data.size());

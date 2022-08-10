@@ -2,17 +2,6 @@
 // min_cost alternative Rust implementation
 // Usage: cargo run  --bin min_cost_rs --release
 
-// #include <algorithm>
-// #include <chrono>
-// #include <iostream>
-// #include <list>
-// #include <math.h>
-// #include <stdio.h>
-// #include <tuple>
-// #include <vector>
-
-// using namespace std;
-
 #[derive(Clone)]
 struct OriginalEdge {
     u: Vindex,
@@ -23,11 +12,15 @@ struct OriginalEdge {
     guaranteed_liquidity: i32
 }
 
-use std::{time::{Instant, Duration}, collections::VecDeque, slice::SliceIndex, io::BufRead};
+use std::{time::{Instant, Duration}, collections::VecDeque, io::BufRead};
 
 fn elapsed(s:&str, start : Instant) {
     let duration = start.elapsed();
     println!("Time difference for  {} = {:?}", s, start.elapsed());
+}
+
+fn crc(a:i32, b:i32) -> i32 {  // Used for comparing implementations
+    (a .wrapping_mul(17)) ^ (b.wrapping_mul(3))
 }
 
 
@@ -409,17 +402,17 @@ fn minus_log_probability(e:&MinCostEdge , er: &MinCostEdge) -> f32 {
     if(use_guaranteed_capacity && from_total+e.guaranteed_liquidity>=capacity) {
         return 0.0;
     }
-    let p=(from_total as f32+1 as f32)/(capacity-e.guaranteed_liquidity+1) as f32;
+    let p=((from_total+1) as f32)/(capacity-e.guaranteed_liquidity+1) as f32;
     return -p.log2()
 }
 
-fn adj_total_mlog_prob(N : Vindex, adj2 : &Vec<Vec<MinCostEdge>>) -> f64 {
-    let mut mlogp: f64=0.0;
+fn adj_total_mlog_prob(N : Vindex, adj2 : &Vec<Vec<MinCostEdge>>) -> f32 {
+    let mut mlogp: f32=0.0;
     for edges in adj2 {
         for e in edges {
             if e.cost < 0 {
                 let er=&adj2[e.v][e.reverse_idx];
-                mlogp+=minus_log_probability(&e, er) as f64;
+                mlogp+=minus_log_probability(&e, er) as f32;
             }
         }
     }
@@ -440,16 +433,22 @@ fn getAdj(e: &MinCostEdge, er: &MinCostEdge,  log_probability_cost_multiplier : 
     if(e.remaining_capacity==0) {
         return (e.v, i32::MAX/2);
     }
-    let mut cost: i32 = e.cost;
+    let mut cost: i64 = e.cost as i64;
     if(log_probability_cost_multiplier >= 0.0) {
         let mut e2 : MinCostEdge =e.clone();
         let mut er2: MinCostEdge=er.clone();
         e2.remaining_capacity-=1;
         er2.remaining_capacity+=1;
-        cost+=(log_probability_cost_multiplier*(minus_log_probability(&e2, &er2))).round() as i32;
-        cost-=(log_probability_cost_multiplier*(minus_log_probability(&e, &er))).round() as i32;
+
+        cost+=((log_probability_cost_multiplier*(minus_log_probability(&e2, &er2))).round() as i64);
+        cost-=((log_probability_cost_multiplier*(minus_log_probability(&e, &er))).round() as i64);
     }
-    return (e.v, cost);
+    // println!("getadj returning {} {}", e.v, cost);
+    if(cost > (i32::MAX/2) as i64) {
+        println!("Too big cost in getAdj!!!!!!!");
+        cost=(i32::MAX/2) as i64;
+    }
+    return (e.v, cost as i32);
 }
 
 fn relative_cost_at(at:i32, edges :& Vec<(MinCostEdge,MinCostEdge)> ,  log_probability_cost_multiplier:f32) -> i64 {
@@ -462,8 +461,8 @@ fn relative_cost_at(at:i32, edges :& Vec<(MinCostEdge,MinCostEdge)> ,  log_proba
             let mut er2:MinCostEdge=er.clone();
             e2.remaining_capacity-=at;
             er2.remaining_capacity+=at;
-            r+=(log_probability_cost_multiplier*(minus_log_probability(&e2, &er2))).round() as i64;
-            r-=(log_probability_cost_multiplier*(minus_log_probability(&e, &er))).round() as i64;
+            r+=((log_probability_cost_multiplier*(minus_log_probability(&e2, &er2))).round() as i64);
+            r-=((log_probability_cost_multiplier*(minus_log_probability(&e, &er))).round() as i64);
         }
         return r;
 }
@@ -490,6 +489,13 @@ fn derivative_at(at:i32,edges:& Vec<(MinCostEdge,MinCostEdge)>,  log_probability
         r+=getAdj(&e, &er, log_probability_cost_multiplier).1 as i64;
     }
     return r;
+}
+
+
+fn derivative2_at(at:i32,edges:& Vec<(MinCostEdge,MinCostEdge)>,  log_probability_cost_multiplier: f32) -> i64 {
+    let mut r : i64=0;
+    return relative_cost_at(at+1, edges, log_probability_cost_multiplier)-
+        relative_cost_at(at, edges, log_probability_cost_multiplier);
 }
 
 
@@ -523,7 +529,7 @@ fn print_at( at: i32,edges:& Vec<(MinCostEdge,MinCostEdge)>,  log_probability_co
         print_at(5, edges, log_probability_cost_multiplier);
         print_at(min_capacity, edges, log_probability_cost_multiplier);
     }
-    if(derivative_at(0, edges, log_probability_cost_multiplier) >= 0) {
+    if(derivative2_at(0, edges, log_probability_cost_multiplier) >= 0) {
         println!("Not negative cycle!!!!!!");
         return 0;
     }
@@ -537,7 +543,7 @@ fn print_at( at: i32,edges:& Vec<(MinCostEdge,MinCostEdge)>,  log_probability_co
         // Positive derivative, find 0 or negative derivative where upper+1 is positive.
         while(upper>lower) {
             let mid=(lower+upper)/2;
-            if(derivative_at(mid, edges, log_probability_cost_multiplier) <= 0) {
+            if(derivative2_at(mid, edges, log_probability_cost_multiplier) <= 0) {
                 lower=mid;
                 if(upper==lower+1) {
                     upper-=1;
@@ -584,7 +590,7 @@ fn print_at( at: i32,edges:& Vec<(MinCostEdge,MinCostEdge)>,  log_probability_co
                 print_at(upper+1, edges, log_probability_cost_multiplier);
                 print_at(upper+2, edges, log_probability_cost_multiplier);
             }
-            while(upper>=0 && derivative_at(upper, edges, log_probability_cost_multiplier) == 0) {
+            while(upper>=0 && derivative2_at(upper, edges, log_probability_cost_multiplier) == 0) {
                 upper-=1;
             }
             if(upper<=0) {
@@ -595,7 +601,7 @@ fn print_at( at: i32,edges:& Vec<(MinCostEdge,MinCostEdge)>,  log_probability_co
                 }
                 return upper;
             }
-            if(derivative_at(upper, edges, log_probability_cost_multiplier) > 0) {
+            if(derivative2_at(upper, edges, log_probability_cost_multiplier) > 0) {
                 break;
             }
             // negative derivative while negative relative cost found.
@@ -615,6 +621,13 @@ fn decrease_total_cost( N:Vindex,adj:&mut Vec<Vec<(Vindex, i32)>>,adj2:&mut Vec<
     // Find negative cycle
     
     let begin=Instant::now();
+    let mut ccc=N.value;
+    for i in &*adj {
+        for j in i {
+            ccc=crc(crc(ccc, j.0.value), j.1);
+        }
+    }
+    // println!("adj ccc {}", ccc);
     let negative_cycle=spfa_early_terminate(N, adj, adj2);
     // elapsed("early terminate negative_cycle", begin);
     let begin=Instant::now();
@@ -734,7 +747,18 @@ fn decrease_total_cost( N:Vindex,adj:&mut Vec<Vec<(Vindex, i32)>>,adj2:&mut Vec<
 
 // Sets flow values to min cost flow.
 fn min_cost_flow(N: Vindex, s: Vindex, t: Vindex, value: i32, log_probability_cost_multiplier: i32,
-    lightning_data: &mut Vec<OriginalEdge>) {
+    lightning_data: &mut Vec<OriginalEdge>, cost_scaling: i32) {
+       let scaled_log_probability_cost_multiplier=log_probability_cost_multiplier*cost_scaling;
+    // let mut ccc=0;
+    for l in &mut *lightning_data {
+        // ccc= crc(crc(crc(crc(crc(crc(ccc, l.u.value), l.v.value), l.capacity), l.cost), l.flow), l.guaranteed_liquidity);
+        l.cost*=cost_scaling;
+        if(l.cost==0) {
+            l.cost=1;
+        }
+    }
+    // println!("lightning_data after read crc {}", ccc);
+
     let M=lightning_data.len();
     // Find max path
     let begin = Instant::now();
@@ -754,7 +778,13 @@ fn min_cost_flow(N: Vindex, s: Vindex, t: Vindex, value: i32, log_probability_co
         lightning_data[i].flow=flow;
     }
     elapsed("edges_with_flow flow info", begin);
-    println!("Total cost before optimizations: {}", total_cost(lightning_data) as f32/1000000.0);
+    let mut ccc=0;
+    for l in &*lightning_data {
+        ccc= crc(crc(crc(crc(crc(crc(ccc, l.u.value), l.v.value), l.capacity), l.cost), l.flow), l.guaranteed_liquidity);
+    }
+    println!("lightning_data after flow crc {}", ccc);
+
+    println!("Total cost before optimizations: {}", total_cost(lightning_data));
     let mut rounds=0;
 
     let begin=Instant::now();
@@ -779,11 +809,26 @@ fn min_cost_flow(N: Vindex, s: Vindex, t: Vindex, value: i32, log_probability_co
             numneg+=1;
         }
         lightning_data_idx.push(adj2[data.u].lenv());
-        adj[data.u].push(getAdj(&e, &er, log_probability_cost_multiplier as f32));
-        adj[data.v].push(getAdj(&er, &e, log_probability_cost_multiplier as f32));
+        adj[data.u].push(getAdj(&e, &er, scaled_log_probability_cost_multiplier as f32));
+        adj[data.v].push(getAdj(&er, &e, scaled_log_probability_cost_multiplier as f32));
         adj2[u].push(e);
         adj2[v].push(er);
     }
+    let mut ccc=0;
+    for i in &*adj {
+        for j in i {
+            ccc=crc(crc(ccc, j.0.value), j.1);
+        }
+    }
+    println!("adj0 ccc {}", ccc);
+    let mut ccc=0;
+    for i in &*adj2 {
+        for j in i {
+            ccc=crc(crc(ccc, j.remaining_capacity), j.reverse_idx.value);
+        }
+    }
+    println!("adj20 ccc {}", ccc);
+    // return;
     // if(debug) {
     //     cout << "numneg: " << numneg <<endl;
     //     cout << "adj_total_cost: " << adj_total_cost(N, adj2)/value*100.0 << "%" << endl;
@@ -796,7 +841,7 @@ fn min_cost_flow(N: Vindex, s: Vindex, t: Vindex, value: i32, log_probability_co
     let mut p_after_100=0.0;
     let mut p_after_200=0.0;
     let mut p_after_400=0.0;
-    while(decrease_total_cost(N, &mut adj, &mut adj2, log_probability_cost_multiplier as f32)) {
+    while(decrease_total_cost(N, &mut adj, &mut adj2, scaled_log_probability_cost_multiplier as f32)) {
         let distance:Duration=begin.elapsed();
         if(cost_after_100==0 && distance.as_millis()>100) {
             cost_after_100=adj_total_cost(N, &adj2)/1000000;
@@ -821,12 +866,12 @@ fn min_cost_flow(N: Vindex, s: Vindex, t: Vindex, value: i32, log_probability_co
         }
     }
     println!("Total cost after optimizations: {}%, p={}%",
-        adj_total_cost(N, &adj2) as f32/1000000.0/value as f32*100.0,
+        adj_total_cost(N, &adj2) as f32/cost_scaling as f32/1000000.0/value as f32*100.0,
         (-adj_total_mlog_prob(N, &adj2)).exp2()*100.0);
-    println!("cost after 0 rounds: {}%", cost_after_0 as f32*1.0/value as f32*100.0);  // 0.1404%)
-    println!("cost after 100: {}%, p={}%", cost_after_100 as f32/value as f32*100.0, p_after_100*100.0);
-    println!("cost after 200: {}%, p={}%", cost_after_200 as f32/value as f32*100.0, p_after_200*100.0);
-    println!("cost after 400: {}%, p={}%", cost_after_400 as f32/value as f32*100.0, p_after_400*100.0);
+    println!("cost after 0 rounds: {}%", (cost_after_0/cost_scaling as i64) as f32*1.0/value as f32*100.0);  // 0.1404%)
+    println!("cost after 100: {}%, p={}%", (cost_after_100/cost_scaling as i64) as f32/value as f32*100.0, p_after_100*100.0);
+    println!("cost after 200: {}%, p={}%", (cost_after_200/cost_scaling as i64) as f32/value as f32*100.0, p_after_200*100.0);
+    println!("cost after 400: {}%, p={}%", (cost_after_400/cost_scaling as i64) as f32/value as f32*100.0, p_after_400*100.0);
     elapsed("total time", begin);  // 2500ms for 0.5 BTC
     println!("{} rounds, satoshis={}", rounds, value);
     println!("{} rounds", rounds);
@@ -893,7 +938,7 @@ fn main(){
     
     elapsed("read", begin);
 
-    min_cost_flow(N, s, t, value, log_probability_cost_multiplier, &mut lightning_data);
+    min_cost_flow(N, s, t, value, log_probability_cost_multiplier, &mut lightning_data, 10);
 
     let mut w = File::create("min_cost.out").unwrap();
     writeln!(&mut w, "{}", lightning_data.len()).unwrap();

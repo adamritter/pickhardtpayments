@@ -29,12 +29,14 @@ class SyncSimulatedPaymentSession():
                  oracle: OracleLightningNetwork,
                  uncertainty_network: UncertaintyNetwork,
                  prune_network: bool = True,
-                 use_negative_circle_solver: bool = False):
+                 use_negative_circle_solver: bool = False,
+                 min_cost_binary:str = "../min_cost"):
         self._oracle = oracle
         self._uncertainty_network = uncertainty_network
         self._prune_network = prune_network
         self._prepare_integer_indices_for_nodes()
         self.use_negative_circle_solver = use_negative_circle_solver
+        self.min_cost_binary=min_cost_binary
 
     def _prepare_integer_indices_for_nodes(self):
         """
@@ -62,7 +64,7 @@ class SyncSimulatedPaymentSession():
         self._min_cost_flow=NegativeCircleMinCostSolver()
         f=open("lightning.data", "w")
         print(len(self._uncertainty_network.network.nodes()), len(self._uncertainty_network.network.edges(data="channel")),
-                 self._mcf_id[src], self._mcf_id[dest], int(amt), 120000000, file=f)
+                 self._mcf_id[src], self._mcf_id[dest], int(amt), 100000000, file=f)
 
         self._arc_to_channel = {}
         index=0
@@ -239,7 +241,10 @@ class SyncSimulatedPaymentSession():
 
         start = time.time()
         #print("solving mcf...")
-        status = self._min_cost_flow.Solve()
+        if self.use_negative_circle_solver:
+            status = self._min_cost_flow.Solve(min_cost_binary=self.min_cost_binary)
+        else:
+            status = self._min_cost_flow.Solve()
 
         if status != self._min_cost_flow.OPTIMAL:
             print('There was an issue with the min cost flow input.')
@@ -416,7 +421,7 @@ class SyncSimulatedPaymentSession():
             cnt += 1
         end = time.time()
         entropy_end = self._uncertainty_network.entropy()
-        print("SUMMARY (use_negative_circle_solver=", self.use_negative_circle_solver , "):")
+        print("SUMMARY (use_negative_circle_solver=", self.use_negative_circle_solver , ", min_cost_binary=", self.min_cost_binary, "):")
         print("========")
         print("Rounds of mcf-computations: ", cnt)
         print("Number of onions sent: ", number_number_of_onions)

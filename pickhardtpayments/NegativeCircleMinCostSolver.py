@@ -1,8 +1,8 @@
 import os
 class NegativeCircleMinCostSolver:
     OPTIMAL=1
-    def Solve(self):
-        os.system("../min_cost")
+    def Solve(self, min_cost_binary="../min_cost"):
+        os.system(min_cost_binary)
         # os.system("../target/release/min_cost_rs")
         f=open("min_cost.out", "r")
         self.flows=[]
